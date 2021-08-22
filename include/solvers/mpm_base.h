@@ -97,6 +97,9 @@ class MPMBase : public MPM {
   void particle_entity_sets(bool check);
 
   //! Particle velocity constraints
+  void particle_initial_velocity();
+
+  //! Particle velocity constraints
   void particle_velocity_constraints();
 
  private:

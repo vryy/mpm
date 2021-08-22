@@ -357,7 +357,10 @@ void mpm::MPMBase<Tdim>::initialise_particles() {
   // Particle entity sets
   this->particle_entity_sets(check_duplicates);
 
-  // Read and assign particles velocity constraints
+  // Read and assign particles initial velocity
+  this->particle_initial_velocity();
+
+  // Read and assign particles velocity constraints. This will override the initial velocity.
   this->particle_velocity_constraints();
 
   console_->info("Rank {} Create particle sets: {} ms", mpi_rank,
@@ -1050,6 +1053,46 @@ void mpm::MPMBase<Tdim>::particle_velocity_constraints() {
       throw std::runtime_error("Particle velocity constraints JSON not found");
   } catch (std::exception& exception) {
     console_->warn("#{}: Particle velocity constraints are undefined {} ",
+                   __LINE__, exception.what());
+  }
+}
+
+// Particle initial velocity
+template <unsigned Tdim>
+void mpm::MPMBase<Tdim>::particle_initial_velocity() {
+  auto mesh_props = io_->json_object("mesh");
+  // Create a file reader
+  const std::string io_type =
+      io_->json_object("mesh")["io_type"].template get<std::string>();
+  auto reader = Factory<mpm::IOMesh<Tdim>>::instance()->create(io_type);
+
+  try {
+    if (mesh_props.find("initial_conditions") != mesh_props.end() &&
+        mesh_props["initial_conditions"].find(
+            "particles_velocity") !=
+            mesh_props["initial_conditions"].end()) {
+
+      // Iterate over velocity condition
+      for (const auto& condition :
+           mesh_props["initial_conditions"]
+                     ["particles_velocity"]) {
+
+        // Set id
+        int pset_id = condition.at("pset_id").template get<int>();
+        // Direction
+        unsigned dir = condition.at("dir").template get<unsigned>();
+        // Velocity
+        double velocity = condition.at("velocity").template get<double>();
+        // Apply the velocity
+        mesh_->iterate_over_particle_set(
+            pset_id,
+            std::bind(&mpm::ParticleBase<Tdim>::apply_particle_velocity_constraints,
+                      std::placeholders::_1, dir, velocity));
+      }
+    } else
+      throw std::runtime_error("Particle initial velocity JSON not found");
+  } catch (std::exception& exception) {
+    console_->warn("#{}: Particle initial velocity are undefined {} ",
                    __LINE__, exception.what());
   }
 }
